@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-'''
+"""
 @File    :   db.py
 @Time    :   2024/11/04 09:59:51
-@Author  :   huihuidehui 
+@Author  :   huihuidehui
 @Version :   1.0
-'''
+"""
 
 # here put the import lib
 from datetime import datetime, timedelta
@@ -13,8 +13,7 @@ from pathlib import Path
 import peewee
 from loguru import logger
 
-database = peewee.SqliteDatabase(
-    str(Path(__file__).parent / 'data'/'ptbrush.db'))
+database = peewee.SqliteDatabase(str(Path(__file__).parent / "data" / "ptbrush.db"))
 
 
 class BaseModel(peewee.Model):
@@ -41,13 +40,11 @@ class Torrent(BaseModel):
 
     class Meta:
         # torrend_id和site联合唯一索引
-        indexes = (
-            (('torrent_id', 'site'), True),
-        )
+        indexes = ((("torrent_id", "site"), True),)
 
 
 class BrushTorrent(BaseModel):
-    torrent = peewee.ForeignKeyField(Torrent, backref='brushes')
+    torrent = peewee.ForeignKeyField(Torrent, backref="brushes")
     up_total_size = peewee.BigIntegerField(default=0)  # 上传总大小
     upspeed = peewee.IntegerField(default=0)  # 当前上传速度
 
@@ -56,32 +53,67 @@ class BrushTorrent(BaseModel):
 
 
 class QBStatus(BaseModel):
-    dlspeed = peewee.IntegerField(default=0)    # 当前下载速度
-    upspeed = peewee.IntegerField(default=0)    # 当前上传速度
+    dlspeed = peewee.IntegerField(default=0)  # 当前下载速度
+    upspeed = peewee.IntegerField(default=0)  # 当前上传速度
 
     up_total_size = peewee.BigIntegerField(default=0)  # 上传总大小
     dl_total_size = peewee.BigIntegerField(default=0)  # 下载总大小
     free_space_size = peewee.BigIntegerField(default=0)  # 剩余磁盘空间
 
+
+class SystemMessage(BaseModel):
+    message_type = peewee.CharField(index=True)  # INFO, SUCCESS, WARNING, ERROR
+    category = peewee.CharField(index=True)  # ADD_TORRENT, DELETE_TORRENT, SYSTEM
+    content = peewee.TextField()
+
+
+def db_log_sink(message):
+    """Loguru sink for writing logs to database"""
+    record = message.record
+    level = record["level"].name
+    content = record["message"]
+
+    # Try to deduce category from content or extra
+    category = record["extra"].get("category", "SYSTEM")
+
+    # Map log levels to our message types
+    # ERROR -> ERROR, WARNING -> WARNING, INFO, CAUTION/SUCCESS map if needed
+
+    try:
+        SystemMessage.create(
+            message_type=level,
+            category=category,
+            content=content,
+            # created_time uses default datetime.now
+        )
+    except Exception as e:
+        # Avoid infinite loop if DB fails
+        print(f"Failed to log to DB: {e}")
+
+
 def migrate_database():
     """执行数据库迁移，添加缺少的字段"""
     try:
         # 创建表（如果不存在）
-        database.create_tables([Torrent, BrushTorrent, QBStatus])
-        
+        database.create_tables([Torrent, BrushTorrent, QBStatus, SystemMessage])
+
         # 检查QBStatus表是否有free_space_size字段
         cursor = database.execute_sql("PRAGMA table_info(qbstatus)")
         columns = [column[1] for column in cursor.fetchall()]
-        
+
         # 如果没有free_space_size字段，添加它
-        if 'free_space_size' not in columns:
+        if "free_space_size" not in columns:
             logger.info("正在升级数据库：添加 free_space_size 字段到 QBStatus 表")
             with database.atomic():
-                database.execute_sql("ALTER TABLE qbstatus ADD COLUMN free_space_size BIGINT DEFAULT 0")
-            logger.info("数据库升级完成")
+                database.execute_sql(
+                    "ALTER TABLE qbstatus ADD COLUMN free_space_size BIGINT DEFAULT 0"
+                )
+
+        logger.info("数据库升级/检查完成")
     except Exception as e:
         logger.error(f"数据库迁移失败: {str(e)}")
         raise
+
 
 # 执行数据库迁移
 # migrate_database()

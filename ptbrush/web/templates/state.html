@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">System State</h1>
+</div>
+
+<!-- Active Torrents -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">进行中的种子 <small id="activeCountInfo" class="ml-2"></small></h5>
+        <div>
+            <span class="badge badge-secondary mr-2" title="分数越低越可能被删除">策略: 最低分优先删除</span>
+            <span class="badge badge-warning">黄色背景: 待删除候选</span>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 600px;">
+            <table class="table table-hover mb-0">
+                <thead class="thead-light">
+                    <tr>
+                        <th style="width: 30%">名称</th>
+                        <th>大小</th>
+                        <th>速度 (↑/↓)</th>
+                        <th>总量 (↑/↓)</th>
+                        <th>Free截止</th>
+                        <th title="分数">分数</th>
+                    </tr>
+                </thead>
+                <tbody id="torrentListBody">
+                    <tr>
+                        <td colspan="6" class="text-center">加载中...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- System Messages -->
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">系统日志</h5>
+
+        <div>
+            <button class="btn btn-sm btn-outline-danger" onclick="clearLogs()">清空日志</button>
+        </div>
+
+        <div class="form-inline">
+            <label class="mr-2 small">级别筛选:</label>
+            <select id="logFilter" class="form-control form-control-sm" style="width: 120px;">
+                <option value="">全部</option>
+                <option value="SUCCESS">成功 (Success)</option>
+                <option value="INFO">信息 (Info)</option>
+                <option value="WARNING">警告 (Warning)</option>
+                <option value="ERROR">错误 (Error)</option>
+                <option value="DELETE_TORRENT">删除记录</option>
+            </select>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="list-group list-group-flush" id="logList" style="max-height: 400px; overflow-y:auto;">
+            <!-- filled by js -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024, sizes = ['B', 'KiB', 'MiB', 'GiB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    function formatSpeed(bytes) { return (bytes / 1024 / 1024).toFixed(2) + ' MiB/s'; }
+
+    function loadTorrents() {
+        fetch('/api/state/torrents')
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('torrentListBody');
+                tbody.innerHTML = '';
+
+                // Update count info
+                const count = data.torrents.length;
+                const max = data.max_active;
+                const infoEl = document.getElementById('activeCountInfo');
+                if (max !== undefined) {
+                    if (count >= max) {
+                        infoEl.innerHTML = `<span class="text-danger font-weight-bold">${count} / ${max} - 已达到最大数量，不会再添加种子</span>`;
+                    } else {
+                        infoEl.innerHTML = `<span class="text-success font-weight-bold">${count} / ${max}</span>`;
+                    }
+                }
+
+                // data.candidates is a list of hashes that are next in line for deletion
+                const candidateHashes = new Set(data.candidates);
+
+                data.torrents.forEach(t => {
+                    const isCandidate = candidateHashes.has(t.hash);
+                    const rowClass = isCandidate ? 'table-warning' : '';
+
+                    const row = `<tr class="${rowClass}">
+                        <td>
+                            <div class="text-truncate" style="max-width: 300px;" title="${t.name}">${t.name}</div>
+                            ${isCandidate ? '<small class="text-danger font-weight-bold">[即将删除此种子]</small>' : ''}
+                        </td>
+                        <td>${formatBytes(t.size)}</td>
+                        <td><small>${formatSpeed(t.upspeed)} / ${formatSpeed(t.dlspeed)}</small></td>
+                        <td><small>${formatBytes(t.up_total)} / ${formatBytes(t.dl_total)}</small></td>
+                        <td>${t.free_end_time}</td>
+                        <td><strong>${t.score}</strong></td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+            });
+    }
+
+    function loadLogs() {
+        const filter = document.getElementById('logFilter').value;
+        fetch(`/api/state/logs?filter=${filter}`)
+            .then(r => r.json())
+            .then(data => {
+                const list = document.getElementById('logList');
+                list.innerHTML = '';
+                if (data.length === 0) {
+                    list.innerHTML = '<div class="p-3 text-center text-muted">暂无日志</div>';
+                    return;
+                }
+                data.forEach(log => {
+                    let badgeClass = 'secondary';
+                    if (log.type === 'SUCCESS') badgeClass = 'success';
+                    if (log.type === 'WARNING') badgeClass = 'warning';
+                    if (log.type === 'ERROR') badgeClass = 'danger';
+                    if (log.type === 'INFO') badgeClass = 'info';
+
+                    const item = `
+                        <div class="list-group-item list-group-item-action flex-column align-items-start py-2">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">
+                                    <span class="badge badge-${badgeClass}">${log.type}</span>
+                                    <span class="ml-2 text-dark">${log.content}</span>
+                                </h6>
+                                <small class="text-muted text-nowrap">${log.time}</small>
+                            </div>
+                            <!-- <small class="text-muted">${log.category}</small> -->
+                        </div>
+                    `;
+                    list.innerHTML += item;
+                });
+            });
+    }
+
+    loadTorrents();
+    loadLogs();
+
+    setInterval(loadTorrents, 5000);
+    setInterval(loadLogs, 10000);
+
+    document.getElementById('logFilter').addEventListener('change', loadLogs);
+
+    function clearLogs() {
+        if (!confirm('确定要清空所有系统日志和物理日志文件吗？此操作不可撤销。')) return;
+
+        fetch('/api/logs/clear', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('日志已清空');
+                    loadLogs();
+                } else {
+                    alert('操作失败: ' + data.error);
+                }
+            })
+            .catch(e => alert('网络错误'));
+    }
+</script>
+{% endblock %}

@@ -2,6 +2,8 @@
 set -e
 if [ "$1" = 'start' ]; then
     USER=app
+    PUID=${PUID:-1000}
+    PGID=${PGID:-1000}
     # 修改app用户的UID和GID
     usermod -o -u ${PUID} ${USER}
     groupmod -o -g ${PGID} ${USER} >/dev/null 2>&1 || :

@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Configuration</h1>
+</div>
+
+<div class="row">
+    <!-- GUI Settings -->
+    <div class="col-lg-5 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-primary text-white">常用参数设置</div>
+            <div class="card-body" style="overflow-y: auto;">
+                <form id="guiConfigForm">
+                    <h6 class="border-bottom pb-2 mb-3">刷流策略 (Brush)</h6>
+
+                    <div class="form-group">
+                        <label>工作时间 (work_time)</label>
+                        <input type="text" class="form-control" id="brush_work_time" placeholder="e.g. 00:00-23:59">
+                        <small class="form-text text-muted">格式: HH:MM-HH:MM</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>最小磁盘空间 (min_disk_space)</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="brush_min_disk_space">
+                            <div class="input-group-append">
+                                <span class="input-group-text">Bytes</span>
+                            </div>
+                        </div>
+                        <small class="form-text text-muted" id="spaceHint"></small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>最大同时活跃种子数 (max_active_torrents)</label>
+                        <input type="number" class="form-control" id="brush_max_active_torrents">
+                    </div>
+
+                    <div class="form-group">
+                        <label>单个种子最大大小 (torrent_max_size)</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="brush_torrent_max_size">
+                            <div class="input-group-append">
+                                <span class="input-group-text">Bytes</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>PT站抓取间隔 (pt_fetch_interval)</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="brush_pt_fetch_interval">
+                            <div class="input-group-append">
+                                <span class="input-group-text">分钟</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>无活动最大时间 (max_no_activate_time)</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="brush_max_no_activate_time">
+                            <div class="input-group-append">
+                                <span class="input-group-text">分钟</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-right mt-4">
+                        <button type="button" class="btn btn-primary" onclick="saveGuiConfig()">保存常用设置</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Raw Editor -->
+    <div class="col-lg-7 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>高级配置 (config.toml)</span>
+                <div>
+                    <button class="btn btn-outline-secondary btn-sm" id="editBtn" onclick="toggleEdit()">解锁编辑</button>
+                    <button class="btn btn-success btn-sm d-none" id="saveRawBtn"
+                        onclick="saveRawConfig()">保存文件</button>
+                </div>
+            </div>
+            <div class="card-body p-0 d-flex flex-column">
+                <textarea id="rawConfig" class="form-control border-0 flex-grow-1"
+                    style="min-height: 600px; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; background: #f8f9fa; resize: none;"
+                    readonly></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // helper to format bytes hint
+    function formatBytes(bytes) {
+        if (isNaN(bytes) || bytes === 0) return '0 B';
+        const k = 1024, sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    document.getElementById('brush_min_disk_space').addEventListener('input', function () {
+        document.getElementById('spaceHint').textContent = '≈ ' + formatBytes(parseInt(this.value));
+    });
+
+    // Load Data
+    function loadConfig() {
+        // Load Raw
+        fetch('/api/config/raw')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('rawConfig').value = data.content;
+            });
+
+        // Load GUI Data (using existing /api/config)
+        fetch('/api/config')
+            .then(r => r.json())
+            .then(data => {
+                const b = data.brush;
+                if (b) {
+                    document.getElementById('brush_work_time').value = b.work_time || '';
+                    document.getElementById('brush_min_disk_space').value = b.min_disk_space || 0;
+                    document.getElementById('brush_pt_fetch_interval').value = b.pt_fetch_interval || 30;
+                    document.getElementById('brush_max_active_torrents').value = b.max_active_torrents || 0;
+                    document.getElementById('brush_torrent_max_size').value = b.torrent_max_size || 0;
+                    document.getElementById('brush_max_no_activate_time').value = b.max_no_activate_time || 0;
+
+                    document.getElementById('spaceHint').textContent = '≈ ' + formatBytes(b.min_disk_space);
+                }
+            });
+    }
+
+    // Save GUI
+    function saveGuiConfig() {
+        const data = {
+            brush: {
+                work_time: document.getElementById('brush_work_time').value,
+                min_disk_space: parseInt(document.getElementById('brush_min_disk_space').value),
+                pt_fetch_interval: parseInt(document.getElementById('brush_pt_fetch_interval').value),
+                max_active_torrents: parseInt(document.getElementById('brush_max_active_torrents').value),
+                torrent_max_size: parseInt(document.getElementById('brush_torrent_max_size').value),
+                max_no_activate_time: parseInt(document.getElementById('brush_max_no_activate_time').value)
+            }
+        };
+
+        fetch('/api/config/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+            .then(r => r.json())
+            .then(res => {
+                if (res.status === 'success') {
+                    alert('设置已保存! 请注意: 部分设置可能需重启生效。');
+                    loadConfig(); // reload to sync raw view
+                } else {
+                    alert('保存失败: ' + res.error);
+                }
+            });
+    }
+
+    // Raw Edit Toggle
+    function toggleEdit() {
+        const area = document.getElementById('rawConfig');
+        const btn = document.getElementById('editBtn');
+        const saveBtn = document.getElementById('saveRawBtn');
+
+        if (area.readOnly) {
+            area.readOnly = false;
+            area.style.background = '#ffffff';
+            btn.textContent = '取消编辑';
+            btn.classList.add('btn-danger');
+            btn.classList.remove('btn-outline-secondary');
+            saveBtn.classList.remove('d-none');
+        } else {
+            area.readOnly = true;
+            area.style.background = '#f8f9fa';
+            btn.textContent = '解锁编辑';
+            btn.classList.remove('btn-danger');
+            btn.classList.add('btn-outline-secondary');
+            saveBtn.classList.add('d-none');
+            // reload to discard changes
+            loadConfig();
+        }
+    }
+
+    function saveRawConfig() {
+        const content = document.getElementById('rawConfig').value;
+        fetch('/api/config/raw', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content })
+        })
+            .then(r => r.json())
+            .then(res => {
+                if (res.status === 'success') {
+                    alert('配置文件已更新! 请重启服务以生效。');
+                    // reset edit mode
+                    toggleEdit();
+                } else {
+                    alert('保存失败: ' + res.error);
+                }
+            });
+    }
+
+    loadConfig();
+</script>
+{% endblock %}

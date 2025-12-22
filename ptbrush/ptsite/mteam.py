@@ -3,10 +3,9 @@
 """
 @File    :   mteam.py
 @Time    :   2024/11/02 14:37:48
-@Author  :   huihuidehui 
+@Author  :   huihuidehui
 @Desc    :   None
 """
-
 
 from datetime import datetime, timedelta
 import json
@@ -16,7 +15,7 @@ from typing import Generator, Optional
 from loguru import logger
 from model import Torrent
 from ptsite import BaseSiteSpider
-import jsonpath
+from jsonpath_ng import parse
 
 
 class MTeamSpider(BaseSiteSpider):
@@ -35,7 +34,7 @@ class MTeamSpider(BaseSiteSpider):
             "pageSize": 200,
             "sortDirection": "DESC",
             "sortField": "CREATED_DATE",
-            "discount":"FREE",
+            "discount": "FREE",
         },
         # 成人最新
         {
@@ -46,7 +45,7 @@ class MTeamSpider(BaseSiteSpider):
             "pageSize": 200,
             "sortDirection": "DESC",
             "sortField": "CREATED_DATE",
-            "discount":"FREE",
+            "discount": "FREE",
         },
         # 电视最新
         {
@@ -57,7 +56,7 @@ class MTeamSpider(BaseSiteSpider):
             "pageSize": 200,
             "sortDirection": "DESC",
             "sortField": "CREATED_DATE",
-            "discount":"FREE",
+            "discount": "FREE",
         },
         # 综合最新
         {
@@ -68,7 +67,7 @@ class MTeamSpider(BaseSiteSpider):
             "pageSize": 200,
             "sortDirection": "DESC",
             "sortField": "CREATED_DATE",
-            "discount":"FREE",
+            "discount": "FREE",
         },
         # 排行榜 下载数最多
         {
@@ -81,8 +80,6 @@ class MTeamSpider(BaseSiteSpider):
             "sortField": "LEECHERS",
         },
     ]
-
-    
 
     def free_torrents(self) -> Generator[Torrent, Torrent, Torrent]:
         for body in self.BODYS:
@@ -102,7 +99,6 @@ class MTeamSpider(BaseSiteSpider):
                 continue
             if data:
                 for item in data:
-
                     # free种子，且有free结束时间
                     if self._is_free_torrent(item) and self._parse_free_end_time(item):
                         yield self._parse_torrent(item)
@@ -110,16 +106,24 @@ class MTeamSpider(BaseSiteSpider):
             # 睡会，别请求太快
             sleep(60)
 
+    def _get_jsonpath_values(self, item, expr):
+        try:
+            jsonpath_expr = parse(expr)
+            return [match.value for match in jsonpath_expr.find(item)]
+        except Exception:
+            return []
+
     def _is_free_torrent(self, item: dict) -> bool:
         """
         满足以下任意即为free,规则如下：
         1. discount = FREE or _2X_FREE
         2. mallSingleFree.status = ONGOING
         """
-        discounts = jsonpath.jsonpath(item, "$.status.discount")
+        discounts = self._get_jsonpath_values(item, "$.status.discount")
 
-        mall_single_free_statuss = jsonpath.jsonpath(
-            item, "$.status.mallSingleFree.status")
+        mall_single_free_statuss = self._get_jsonpath_values(
+            item, "$.status.mallSingleFree.status"
+        )
 
         if discounts and discounts[0] in ["FREE", "_2X_FREE"]:
             return True
@@ -127,19 +131,22 @@ class MTeamSpider(BaseSiteSpider):
             return True
         return False
 
-    def _parse_free_end_time(self, item:dict)->Optional[str]:
-        discount_end_times_1 = jsonpath.jsonpath(item, "$.status.discountEndTime")
+    def _parse_free_end_time(self, item: dict) -> Optional[str]:
+        discount_end_times_1 = self._get_jsonpath_values(
+            item, "$.status.discountEndTime"
+        )
         if discount_end_times_1 and discount_end_times_1[0]:
             return discount_end_times_1[0]
-        discount_end_times_2 = jsonpath.jsonpath(item, "$.status.mallSingleFree.endDate")
+        discount_end_times_2 = self._get_jsonpath_values(
+            item, "$.status.mallSingleFree.endDate"
+        )
         if discount_end_times_2 and discount_end_times_2[0]:
             return discount_end_times_2[0]
         return None
-        
 
     def _parse_torrent(self, item: dict) -> Torrent:
         free_end_time_str = self._parse_free_end_time(item)
-            
+
         free_end_time = datetime.strptime(free_end_time_str, "%Y-%m-%d %H:%M:%S")
 
         torrent = Torrent(
@@ -152,7 +159,7 @@ class MTeamSpider(BaseSiteSpider):
                 item.get("createdDate"), "%Y-%m-%d %H:%M:%S"
             ),
             free_end_time=free_end_time,
-            site=self.NAME
+            site=self.NAME,
         )
 
         return torrent
@@ -169,7 +176,7 @@ class MTeamSpider(BaseSiteSpider):
         torrent_url = json.loads(response.text).get("data")
         return torrent_url
 
-    def download_torrent_content(self, torrent_link:str)->Optional[bytes]:
+    def download_torrent_content(self, torrent_link: str) -> Optional[bytes]:
         """
         获取种子内容
         """
@@ -181,4 +188,3 @@ class MTeamSpider(BaseSiteSpider):
             return None
         except:
             return torrent_download_res.content
-                

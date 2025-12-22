@@ -1,30 +1,22 @@
-[tool.poetry]
+[project]
 name = "ptbrush"
 version = "0.1.0"
-description = ""
-authors = ["huihuidehui <kanhuihui@163.com>"]
+description = "Add your description here"
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.10"
-click = "^8.1.7"
-qbittorrent-api = "^2024.10.68"
-pydantic = "^2.9.2"
-pydantic-settings = {extras = ["toml"], version = "^2.7.0"}
-loguru = "^0.7.2"
-requests = "^2.32.3"
-prettytable = "^3.12.0"
-peewee = "^3.17.7"
-apscheduler = "^3.10.4"
-jsonpath = "^0.82.2"
-pytest = "^8.3.4"
-pytest-mock = "^3.14.0"
-flask = "^3.1.0"
-flask-cors = "^5.0.1"
-pandas = "^2.2.3"
-plotly = "^6.0.0"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic-settings>=2.7.0",
+    "qbittorrent-api>=2024.10.68",
+    "apscheduler>=3.10.4",
+    "flask-cors>=5.0.0",
+    "loguru>=0.7.2",
+    "peewee>=3.17.8",
+    "prettytable>=3.12.0",
+    "requests>=2.32.3",
+    "click>=8.1.7",
+    "flask>=3.1.0",
+    "pandas>=2.2.3",
+    "plotly>=6.0.0",
+    "tomlkit>=0.13.3",
+    "jsonpath-ng>=1.6.0",
+]

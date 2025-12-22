@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+</div>
+
+<!-- Realtime Status -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center p-3">
+            <h3 class="card-title display-4" style="font-size: 2rem;" id="upspeed">0</h3>
+            <p class="card-text text-muted">上传速度 (MiB/s)</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center p-3">
+            <h3 class="card-title display-4" style="font-size: 2rem;" id="dlspeed">0</h3>
+            <p class="card-text text-muted">下载速度 (MiB/s)</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center p-3">
+            <h3 class="card-title display-4" style="font-size: 2rem;" id="totalActive">0</h3>
+            <p class="card-text text-muted">活跃种子数</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center p-3">
+            <h3 class="card-title display-4" style="font-size: 2rem;" id="freeSpace">0</h3>
+            <p class="card-text text-muted">剩余空间 (GiB)</p>
+        </div>
+    </div>
+</div>
+
+<!-- Period Statistics -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header h5">统计数据 (添加/删除/流量)</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered mb-0 text-center">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>时间范围</th>
+                                <th>添加种子数</th>
+                                <th>删除种子数</th>
+                                <th>上传增量</th>
+                                <th>下载增量</th>
+                            </tr>
+                        </thead>
+                        <tbody id="periodStatsBody">
+                            <tr>
+                                <td colspan="5">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">速度趋势</h5>
+                <div class="btn-group btn-group-sm" role="group" aria-label="时间范围">
+                    <button type="button" class="btn btn-outline-primary active" data-time="10">10分钟</button>
+                    <button type="button" class="btn btn-outline-primary" data-time="30">30分钟</button>
+                    <button type="button" class="btn btn-outline-primary" data-time="60">1小时</button>
+                    <button type="button" class="btn btn-outline-primary" data-time="360">6小时</button>
+                    <button type="button" class="btn btn-outline-primary" data-time="1440">24小时</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="speedChart" style="width:100%; height:300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 格式化函数
+    function formatSpeed(bytesPerSecond) {
+        return (bytesPerSecond / (1024 * 1024)).toFixed(2);
+    }
+
+    function loadStats() {
+        fetch('/api/stats/dashboard')
+            .then(response => response.json())
+            .then(data => {
+                // Update realtime cards
+                document.getElementById('upspeed').textContent = formatSpeed(data.status.upspeed);
+                document.getElementById('dlspeed').textContent = formatSpeed(data.status.dlspeed);
+                document.getElementById('totalActive').textContent = data.status.active_count;
+                document.getElementById('freeSpace').textContent = (data.status.free_space / (1024 * 1024 * 1024)).toFixed(0);
+
+                // Update period stats table
+                const tbody = document.getElementById('periodStatsBody');
+                tbody.innerHTML = '';
+
+                const periods = [
+                    { key: '1d', label: '最近24小时' },
+                    { key: '3d', label: '最近3天' },
+                    { key: '7d', label: '最近7天' }
+                ];
+
+                periods.forEach(p => {
+                    const stats = data.period_stats[p.key];
+                    if (stats) {
+                        const row = `<tr>
+                            <td>${p.label}</td>
+                            <td>${stats.added_count}</td>
+                            <td>${stats.deleted_count}</td>
+                            <td>${(stats.upload_traffic / (1024 * 1024 * 1024)).toFixed(2)} GiB</td>
+                            <td>${(stats.download_traffic / (1024 * 1024 * 1024)).toFixed(2)} GiB</td>
+                        </tr>`;
+                        tbody.innerHTML += row;
+                    }
+                });
+            })
+            .catch(err => console.error(err));
+    }
+
+    function loadHistory(minutes = 10) {
+        fetch(`/api/history?minutes=${minutes}`)
+            .then(response => response.json())
+            .then(data => {
+                const plotData = [
+                    {
+                        x: data.timestamps,
+                        y: data.upspeed.map(s => s / (1024 * 1024)),
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: '上传',
+                        line: { color: '#28a745' }
+                    },
+                    {
+                        x: data.timestamps,
+                        y: data.dlspeed.map(s => s / (1024 * 1024)),
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: '下载',
+                        line: { color: '#007bff' }
+                    }
+                ];
+                const layout = {
+                    margin: { l: 50, r: 30, t: 20, b: 50 },
+                    xaxis: { title: '时间', automargin: true },
+                    yaxis: { title: 'MiB/s' },
+                    legend: { orientation: 'h', y: 1.1 }
+                };
+                Plotly.newPlot('speedChart', plotData, layout);
+            });
+    }
+
+    // Init
+    loadStats();
+    loadHistory(10);
+    setInterval(loadStats, 5000);
+
+    // Chart buttons
+    document.querySelectorAll('.btn-group[aria-label="时间范围"] .btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.btn-group .btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            loadHistory(parseInt(this.getAttribute('data-time')));
+        });
+    });
+</script>
+{% endblock %}
