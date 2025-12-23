@@ -3,7 +3,9 @@
 .gitignore
 *.md
 *.toml
+!pyproject.toml
 *.lock
+!uv.lock
 *.db
 .DS_Store
 __pycache__
