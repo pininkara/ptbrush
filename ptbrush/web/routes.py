@@ -130,30 +130,6 @@ def get_dashboard_stats():
         return jsonify({"error": str(e)}), 500
 
 
-@main_bp.route("/api/history")
-def get_history():
-    """Get historical data for charts"""
-    try:
-        minutes = int(request.args.get("minutes", 10))
-        since = datetime.now() - timedelta(minutes=minutes)
-
-        history = (
-            QBStatus.select(QBStatus.created_time, QBStatus.upspeed, QBStatus.dlspeed)
-            .where(QBStatus.created_time >= since)
-            .order_by(QBStatus.created_time)
-        )
-
-        data = {"timestamps": [], "upspeed": [], "dlspeed": []}
-        for record in history:
-            data["timestamps"].append(record.created_time.strftime("%Y-%m-%d %H:%M:%S"))
-            data["upspeed"].append(record.upspeed)
-            data["dlspeed"].append(record.dlspeed)
-
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 @main_bp.route("/api/state/torrents")
 def get_state_torrents():
     """Get active torrents and candidates"""

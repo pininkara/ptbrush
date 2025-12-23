@@ -12,6 +12,7 @@ PTBrush是一款专注于PT站点刷流的全自动工具，让你的QBittorrent
 - config界面可快速修改配置
 - 对种子数量限制由只限制同时下载数量改为所有ptbrush分类的数量
 - 扫描不活动种子时会自动ptbrush分类下删除所有错误和等待的种子
+- 添加API Endpoint ：`/api/dashboard/data`
 - 已知bug：如果TOML里没有某项配置，config界面修改该项配置不会保存
 
 ## 这是什么？🤔

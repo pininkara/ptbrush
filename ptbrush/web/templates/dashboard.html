@@ -62,26 +62,7 @@
     </div>
 </div>
 
-<!-- Chart -->
-<div class="row">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">速度趋势</h5>
-                <div class="btn-group btn-group-sm" role="group" aria-label="时间范围">
-                    <button type="button" class="btn btn-outline-primary active" data-time="10">10分钟</button>
-                    <button type="button" class="btn btn-outline-primary" data-time="30">30分钟</button>
-                    <button type="button" class="btn btn-outline-primary" data-time="60">1小时</button>
-                    <button type="button" class="btn btn-outline-primary" data-time="360">6小时</button>
-                    <button type="button" class="btn btn-outline-primary" data-time="1440">24小时</button>
-                </div>
-            </div>
-            <div class="card-body">
-                <div id="speedChart" style="width:100%; height:300px;"></div>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 {% endblock %}
 
@@ -129,50 +110,14 @@
             .catch(err => console.error(err));
     }
 
-    function loadHistory(minutes = 10) {
-        fetch(`/api/history?minutes=${minutes}`)
-            .then(response => response.json())
-            .then(data => {
-                const plotData = [
-                    {
-                        x: data.timestamps,
-                        y: data.upspeed.map(s => s / (1024 * 1024)),
-                        type: 'scatter',
-                        mode: 'lines',
-                        name: '上传',
-                        line: { color: '#28a745' }
-                    },
-                    {
-                        x: data.timestamps,
-                        y: data.dlspeed.map(s => s / (1024 * 1024)),
-                        type: 'scatter',
-                        mode: 'lines',
-                        name: '下载',
-                        line: { color: '#007bff' }
-                    }
-                ];
-                const layout = {
-                    margin: { l: 50, r: 30, t: 20, b: 50 },
-                    xaxis: { title: '时间', automargin: true },
-                    yaxis: { title: 'MiB/s' },
-                    legend: { orientation: 'h', y: 1.1 }
-                };
-                Plotly.newPlot('speedChart', plotData, layout);
-            });
-    }
+
 
     // Init
     loadStats();
-    loadHistory(10);
+
     setInterval(loadStats, 5000);
 
     // Chart buttons
-    document.querySelectorAll('.btn-group[aria-label="时间范围"] .btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            document.querySelectorAll('.btn-group .btn').forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            loadHistory(parseInt(this.getAttribute('data-time')));
-        });
-    });
+
 </script>
 {% endblock %}
