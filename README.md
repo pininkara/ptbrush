@@ -4,6 +4,7 @@ PTBrush是一款专注于PT站点刷流的全自动工具，让你的QBittorrent
 
 在原版的基础上添加了以下内容：
 
+- 更换包管理器为 [uv](https://docs.astral.sh/uv/)
 - 移除拆包逻辑
 - 修改网页为dashboard、state和config三个页面
 - 统计界面添加24h、3d、7d的统计
