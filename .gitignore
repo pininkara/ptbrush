@@ -107,6 +107,7 @@ venv.bak/
 .idea/
 
 *.lock
+!uv.lock
 *.db
 .vscode
 
